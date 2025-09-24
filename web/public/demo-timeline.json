@@ -1,0 +1,192 @@
+{
+  "actions": [
+    {
+      "id": "notify-start",
+      "kind": "terminal_output",
+      "text": "Timed demo starting...\n",
+      "timeMs": 20800
+    },
+    {
+      "id": "create-index",
+      "kind": "create_file",
+      "path": "index.html",
+      "timeMs": 23500
+    },
+    {
+      "id": "open-index-initial",
+      "kind": "open_file",
+      "path": "index.html",
+      "timeMs": 23800
+    },
+    {
+      "id": "type-index",
+      "kind": "type",
+      "path": "index.html",
+      "text": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Timed Sync Demo</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <h1 id=\"title\">Hello Sync</h1>\n  <button id=\"btn\">Change</button>\n  <script src=\"script.js\"></script>\n</body>\n</html>",
+      "timeMs": 25500,
+      "delayMs": 17000
+    },
+    {
+      "id": "move-index-button",
+      "kind": "move_cursor",
+      "path": "index.html",
+      "line": 10,
+      "column": 30,
+      "timeMs": 44200
+    },
+    {
+      "id": "highlight-button",
+      "kind": "highlight_range",
+      "path": "index.html",
+      "range": {
+        "startLine": 10,
+        "startColumn": 3,
+        "endLine": 10,
+        "endColumn": 29
+      },
+      "durationMs": 1200,
+      "timeMs": 44800
+    },
+    {
+      "id": "comment-button",
+      "kind": "type",
+      "path": "index.html",
+      "text": " <!-- Button triggers JS -->",
+      "timeMs": 49500
+    },
+    {
+      "id": "create-style",
+      "kind": "create_file",
+      "path": "style.css",
+      "timeMs": 55100
+    },
+    {
+      "id": "open-style",
+      "kind": "open_file",
+      "path": "style.css",
+      "timeMs": 55500
+    },
+    {
+      "id": "type-style",
+      "kind": "type",
+      "path": "style.css",
+      "text": "body{font-family:Segoe UI, sans-serif;display:grid;place-items:center;min-height:100vh;background:#0f172a;color:#e2e8f0;margin:0;}\nh1{margin-bottom:1rem;color:#93c5fd;}\nbutton{padding:.6rem 1.2rem;border:none;border-radius:999px;background:linear-gradient(135deg,#38bdf8,#6366f1);color:#0f172a;cursor:pointer}",
+      "timeMs": 59500,
+      "delayMs": 10000
+    },
+    {
+      "id": "highlight-style",
+      "kind": "highlight_range",
+      "path": "style.css",
+      "range": {
+        "startLine": 1,
+        "startColumn": 1,
+        "endLine": 3,
+        "endColumn": 109
+      },
+      "durationMs": 1500,
+      "timeMs": 103500
+    },
+    {
+      "id": "create-script",
+      "kind": "create_file",
+      "path": "script.js",
+      "timeMs": 114500
+    },
+    {
+      "id": "open-script",
+      "kind": "open_file",
+      "path": "script.js",
+      "timeMs": 114800
+    },
+    {
+      "id": "type-script",
+      "kind": "type",
+      "path": "script.js",
+      "text": "const title=document.getElementById('title');\nconst btn=document.getElementById('btn');\nconst messages=['Hello Sync','Right on time','Gemini hears this'];\nlet i=0;\nbtn.addEventListener('click',()=>{i=(i+1)%messages.length;title.textContent=messages[i];});\n",
+      "timeMs": 117000,
+      "delayMs": 11000
+    },
+    {
+      "id": "move-script-comment",
+      "kind": "move_cursor",
+      "path": "script.js",
+      "line": 5,
+      "column": 303,
+      "timeMs": 130000
+    },
+    {
+      "id": "comment-script",
+      "kind": "type",
+      "path": "script.js",
+      "text": " // Cycle through headlines",
+      "timeMs": 131000
+    },
+    {
+      "id": "highlight-script",
+      "kind": "highlight_range",
+      "path": "script.js",
+      "range": {
+        "startLine": 5,
+        "startColumn": 1,
+        "endLine": 5,
+        "endColumn": 82
+      },
+      "durationMs": 1500,
+      "timeMs": 133500
+    },
+    {
+      "id": "notify-terminal-start",
+      "kind": "terminal_output",
+      "text": "Running echo to simulate long task...\n",
+      "timeMs": 141000
+    },
+    {
+      "id": "terminal-run",
+      "kind": "terminal_run",
+      "command": "echo Simulating work... && ping 127.0.0.1 -n 2 > nul && echo Done.",
+      "timeMs": 142000
+    },
+    {
+      "id": "terminal-output",
+      "kind": "terminal_output",
+      "text": "Simulating work...\nDone.\n",
+      "timeMs": 144500,
+      "delayMs": 400
+    },
+    {
+      "id": "reopen-index",
+      "kind": "open_file",
+      "path": "index.html",
+      "timeMs": 155000
+    },
+    {
+      "id": "move-index-end",
+      "kind": "move_cursor",
+      "path": "index.html",
+      "line": 11,
+      "column": 6,
+      "timeMs": 158000
+    },
+    {
+      "id": "highlight-footer",
+      "kind": "highlight_range",
+      "path": "index.html",
+      "range": {
+        "startLine": 11,
+        "startColumn": 3,
+        "endLine": 11,
+        "endColumn": 33
+      },
+      "durationMs": 1500,
+      "timeMs": 158500
+    },
+    {
+      "id": "notify-complete",
+      "kind": "terminal_output",
+      "text": "Timed demo complete.\n",
+      "timeMs": 208000
+    }
+  ]
+}
+

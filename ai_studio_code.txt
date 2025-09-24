@@ -1,0 +1,166 @@
+{
+  "actions": [
+    {
+      "action": "show_notification",
+      "time_ms": 20800,
+      "message": "Timed demo starting..."
+    },
+    {
+      "action": "create_file",
+      "time_ms": 23500,
+      "path": "index.html"
+    },
+    {
+      "action": "type",
+      "time_ms": 25500,
+      "delay_ms": 17000,
+      "text": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>Timed Sync Demo</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <h1 id=\"title\">Hello Sync</h1>\n  <button id=\"btn\">Change</button>\n  <script src=\"script.js\"></script>\n</body>\n</html>"
+    },
+    {
+      "action": "move_cursor",
+      "time_ms": 44200,
+      "line": 10,
+      "character": 7
+    },
+    {
+      "action": "highlight",
+      "time_ms": 44800,
+      "file": "index.html",
+      "line": 10,
+      "start": 2,
+      "end": 28,
+      "color": "rgba(255,247,0,0.35)"
+    },
+    {
+      "action": "add_comment",
+      "time_ms": 49500,
+      "file": "index.html",
+      "line": 10,
+      "text": " <!-- Button triggers JS -->"
+    },
+    {
+      "action": "create_file",
+      "time_ms": 55100,
+      "path": "style.css"
+    },
+    {
+      "action": "type",
+      "time_ms": 59500,
+      "delay_ms": 10000,
+      "text": "body{font-family:Segoe UI, sans-serif;display:grid;place-items:center;min-height:100vh;background:#0f172a;color:#e2e8f0;margin:0;}\nh1{margin-bottom:1rem;color:#93c5fd;}\nbutton{padding:.6rem 1.2rem;border:none;border-radius:999px;background:linear-gradient(135deg,#38bdf8,#6366f1);color:#0f172a;cursor:pointer}"
+    },
+    {
+      "action": "highlight",
+      "time_ms": 103500,
+      "file": "style.css",
+      "line": 1,
+      "start": 0,
+      "end": 128,
+      "color": "rgba(56,189,248,0.35)"
+    },
+    {
+      "action": "create_file",
+      "time_ms": 114500,
+      "path": "script.js"
+    },
+    {
+      "action": "type",
+      "time_ms": 117000,
+      "delay_ms": 11000,
+      "text": "const title=document.getElementById('title');\nconst btn=document.getElementById('btn');\nconst messages=['Hello Sync','Right on time','Gemini hears this'];\nlet i=0;\nbtn.addEventListener('click',()=>{i=(i+1)%messages.length;title.textContent=messages[i];});"
+    },
+    {
+      "action": "move_cursor",
+      "time_ms": 130000,
+      "line": 5,
+      "character": 82
+    },
+    {
+      "action": "add_comment",
+      "time_ms": 131000,
+      "file": "script.js",
+      "line": 5,
+      "text": " // Cycle through headlines"
+    },
+    {
+      "action": "highlight",
+      "time_ms": 133500,
+      "file": "script.js",
+      "line": 5,
+      "start": 0,
+      "end": 81,
+      "color": "rgba(99,102,241,0.35)"
+    },
+    {
+      "action": "show_notification",
+      "time_ms": 141000,
+      "message": "Running echo to simulate long task..."
+    },
+    {
+      "action": "run_terminal_command",
+      "time_ms": 142000,
+      "command": "echo Simulating work... && ping 127.0.0.1 -n 2 > nul && echo Done."
+    },
+    {
+      "action": "navigate_to_file",
+      "time_ms": 155000,
+      "path": "index.html"
+    },
+    {
+      "action": "move_cursor",
+      "time_ms": 158000,
+      "line": 11,
+      "character": 5
+    },
+    {
+      "action": "highlight",
+      "time_ms": 158500,
+      "file": "index.html",
+      "line": 11,
+      "start": 2,
+      "end": 32,
+      "color": "rgba(255,247,0,0.35)"
+    },
+    {
+      "action": "show_notification",
+      "time_ms": 208000,
+      "message": "Timed demo complete."
+    }
+  ]
+}
+
+derived from this script : "(warm, welcoming)
+Hey everyone, and welcome! Today, we're going to build a tiny interactive webpage together. The real goal here is to see how we can get visuals on the screen to match up perfectly with what you're hearing right now.
+(casual, setting expectations)
+So, I'll start by setting up the basic files. Then, you'll see the code appear line by line, just as if I were typing it myself.
+(decisive)
+Alright, let's start with the HTML.
+(thoughtful, as if typing)
+Okay, so in here we need the basics... a title, a link to our stylesheet, and of course, the script file. And for the page itself, just a simple heading and a button to make things interactive.
+(pointing, conversational)
+See that button right there? That's the key piece that will trigger our JavaScript later on. I'll just leave a little note for myself so I don't forget.
+(chuckling lightly)
+You know how it is.
+(quick, shifting gears)
+Okay, style time. Let's make this look nice and clean.
+(descriptive, painting a picture)
+I'm thinking a simple centered layout, a nice dark background so it's easy on the eyes, and maybe a cheerful little gradient for the button to make it pop.
+(satisfied)
+Yeah, that's looking pretty friendly.
+(focused)
+Now for the fun part: making it work.
+(methodical)
+First, we'll need to grab the heading and the button from the page. Then, we can set up a few different messages to cycle through. Every time you click the button, it'll just... switch to the next message in the list.
+(explaining)
+I'll add a quick comment here to explain the logic. It's a neat little trick for rotating through an array.
+(pleased)
+Simple, but it makes the page feel alive.
+(informative, preparing for a change)
+Alright, for this next part, I'm going to run a command in the terminal. It's just going to pause for a couple of seconds, but it's a great way for us to see how the system handles a little delay without everything falling out of sync.
+(casual, returning)
+Okay, that's done. Let's just hop back to the HTML file to finish up. We'll highlight our script tag one last time.
+(contemplative, slight pause)
+Just making sure everything... is... connected.
+(upbeat, conclusive)
+And there we have it! A perfectly synced walkthrough. Thanks so much for watching."
+
