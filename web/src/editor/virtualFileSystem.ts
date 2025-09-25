@@ -9,12 +9,16 @@ export class VirtualFileSystem {
     this.monacoInstance = monacoInstance;
   }
 
-  dispose() {
+  reset() {
     for (const model of this.models.values()) {
       model.dispose();
     }
     this.models.clear();
     this.openedPath = null;
+  }
+
+  dispose() {
+    this.reset();
     this.monacoInstance = null;
   }
 

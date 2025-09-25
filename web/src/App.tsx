@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 
-import type { FiredActionMeta, TimelineAction } from './timeline';
+import type { TimelineAction } from './timeline';
 import { TimelineScheduler } from './timeline';
 import { ActionExecutor } from './editor/actionExecutor';
 import { TerminalController } from './terminal/terminalController';
 
-type PlayerStatus = 'idle' | 'running' | 'paused' | 'complete';
-
-interface FiredActionLog {
-  action: TimelineAction;
-  meta: FiredActionMeta;
-}
+const DEFAULT_AUDIO_SOURCE = '/demo.mp3';
 
 const FALLBACK_TIMELINE: TimelineAction[] = [
   {
@@ -29,39 +25,117 @@ const FALLBACK_TIMELINE: TimelineAction[] = [
   },
 ];
 
-const activityBarItems = ['files', 'search', 'git', 'run', 'extensions'];
+const ACTIVITY_ITEMS = [
+  { id: 'explorer', label: 'Files' },
+  { id: 'search', label: 'Search' },
+  { id: 'run', label: 'Run' },
+  { id: 'extensions', label: 'Extensions' },
+  { id: 'experience-console', label: 'Experience', togglesConsole: true },
+];
 
-const formatTime = (ms: number) => `${(ms / 1000).toFixed(2)}s`;
+const MAJOR_ACTION_KINDS = new Set<TimelineAction['kind']>(['create_file', 'type', 'terminal_run']);
+
+type PlayerStatus = 'idle' | 'running' | 'paused' | 'complete';
+
+type PipelineStage = 'idle' | 'planning' | 'generating' | 'rendering' | 'ready';
+
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  hasPlan?: boolean;
+};
+
+const PlanStages: PipelineStage[] = ['planning', 'generating', 'rendering', 'ready'];
+
+const formatTime = (ms: number) => {
+  if (!Number.isFinite(ms)) {
+    return '0:00';
+  }
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60).toString();
+  const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+  return `${minutes}:${seconds}`;
+};
 
 const actionKey = (action: TimelineAction) => action.id ?? `${action.kind}-${action.timeMs}`;
 
-const formatActionLabel = (kind: TimelineAction['kind']) =>
-  kind
-    .split('_')
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ');
+function PlayIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M8 5.14v13.72c0 .31.17.6.45.76a.84.84 0 0 0 .84-.02L18.4 13.5a.9.9 0 0 0 0-1.5L9.3 4.4A.83.83 0 0 0 8 5.14Z" />
+    </svg>
+  );
+}
 
-const deriveFiles = (actions: TimelineAction[]) => {
-  const files = new Set<string>();
-  for (const action of actions) {
-    if ('path' in action && typeof action.path === 'string') {
-      files.add(action.path);
-    }
-  }
-  return Array.from(files).sort((a, b) => a.localeCompare(b));
-};
+function PauseIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M8 5c-.55 0-1 .45-1 1v12c0 .55.45 1 1 1h1.5c.55 0 1-.45 1-1V6c0-.55-.45-1-1-1H8Zm6.5 0c-.55 0-1 .45-1 1v12c0 .55.45 1 1 1H16c.55 0 1-.45 1-1V6c0-.55-.45-1-1-1h-1.5Z" />
+    </svg>
+  );
+}
+
+function ResetIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M3 12a9 9 0 0 1 15.37-6.36" />
+      <path d="M3 4v8h8" />
+      <path d="M21 12a9 9 0 0 1-15.37 6.36" />
+      <path d="M21 20v-8h-8" />
+    </svg>
+  );
+}
+
+function ExperienceIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 10h18" />
+      <path d="M8 15h.01" />
+      <path d="M12 15h.01" />
+      <path d="M16 15h.01" />
+    </svg>
+  );
+}
+
+function ActivityIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m4 12 3 3 6-6 4 4 3-3" />
+    </svg>
+  );
+}
 
 function App() {
+  const [audioSource, setAudioSource] = useState<string>(DEFAULT_AUDIO_SOURCE);
+  const audioObjectUrlRef = useRef<string | null>(null);
   const [timelineActions, setTimelineActions] = useState<TimelineAction[]>([]);
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const [timelineLoading, setTimelineLoading] = useState(true);
   const [status, setStatus] = useState<PlayerStatus>('idle');
-  const [firedActions, setFiredActions] = useState<FiredActionLog[]>([]);
-  const [lastSeekMs, setLastSeekMs] = useState<number | null>(null);
+  const [firedKeys, setFiredKeys] = useState<Set<string>>(new Set());
+  const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [editorReady, setEditorReady] = useState(false);
+  const [isConsoleOpen, setIsConsoleOpen] = useState(true);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
+  const [lastSeekMs, setLastSeekMs] = useState<number | null>(null);
+  const [assetsReady, setAssetsReady] = useState(false);
+  const [pipelineStage, setPipelineStage] = useState<PipelineStage>('ready');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content:
+        "Hey there! Ask for a coding demo and I'll line up the perfect show. When you like the plan, approve it and I'll stage it here in the studio.",
+    },
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [assetMessage, setAssetMessage] = useState<string | null>(null);
 
   const executorRef = useRef<ActionExecutor | null>(null);
   if (!executorRef.current) {
@@ -81,6 +155,8 @@ function App() {
   const schedulerRef = useRef<TimelineScheduler | null>(null);
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalControllerRef = useRef<TerminalController | null>(null);
+  const planningTimeoutRef = useRef<number | null>(null);
+  const pipelineTimeoutsRef = useRef<number[]>([]);
 
   const timelineDurationMs = useMemo(() => {
     if (timelineActions.length === 0) {
@@ -89,56 +165,107 @@ function App() {
     return timelineActions[timelineActions.length - 1]?.timeMs ?? 0;
   }, [timelineActions]);
 
-  const derivedFiles = useMemo(() => deriveFiles(timelineActions), [timelineActions]);
+  const majorTimelineActions = useMemo(
+    () => timelineActions.filter((action) => MAJOR_ACTION_KINDS.has(action.kind)),
+    [timelineActions],
+  );
 
-  useEffect(() => {
-    setFiles((prev) => {
-      if (prev.length === derivedFiles.length && prev.every((value, index) => value === derivedFiles[index])) {
-        return prev;
+  const fetchShowFromUrl = useCallback(async (url: string) => {
+    setAssetsReady(false);
+    setTimelineLoading(true);
+    setTimelineError(null);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Failed to load timeline: ${res.status}`);
       }
-      return derivedFiles;
-    });
-  }, [derivedFiles]);
-
-  useEffect(() => {
-    if (!activeFile && derivedFiles.length > 0) {
-      setActiveFile(derivedFiles[0]);
+      const data = await res.json();
+      if (!Array.isArray(data?.actions)) {
+        throw new Error('Timeline file missing actions array');
+      }
+      setTimelineActions(data.actions as TimelineAction[]);
+      setAssetMessage(`Loaded timeline from ${url}`);
+      setAssetsReady(true);
+    } catch (error) {
+      console.error('Failed to load timeline', error);
+      setTimelineError(error instanceof Error ? error.message : 'Unknown error');
+      setTimelineActions(FALLBACK_TIMELINE);
+      setAssetMessage('Using fallback timeline');
+      setAssetsReady(true);
+    } finally {
+      setTimelineLoading(false);
     }
-  }, [activeFile, derivedFiles]);
+  }, []);
+
+  useEffect(() => () => {
+    if (audioObjectUrlRef.current) {
+      URL.revokeObjectURL(audioObjectUrlRef.current);
+      audioObjectUrlRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const loadTimeline = async () => {
-      setTimelineLoading(true);
-      setTimelineError(null);
-      try {
-        const res = await fetch('/demo-timeline.json');
-        if (!res.ok) {
-          throw new Error(`Failed to load timeline: ${res.status}`);
-        }
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data.actions)) {
-          setTimelineActions(data.actions as TimelineAction[]);
-        }
-      } catch (error) {
-        console.error('Failed to load timeline', error);
-        if (!cancelled) {
-          setTimelineError(error instanceof Error ? error.message : 'Unknown error');
-          setTimelineActions(FALLBACK_TIMELINE);
-        }
-      } finally {
-        if (!cancelled) {
-          setTimelineLoading(false);
-        }
-      }
-    };
+    fetchShowFromUrl('/demo-timeline.json');
+  }, [fetchShowFromUrl]);
 
-    void loadTimeline();
+  useEffect(() => {
+    executorRef.current?.reset();
+    setFiles([]);
+    setActiveFile(null);
+    setFiredKeys(new Set());
+    setActiveActionKey(null);
+    setStatus('idle');
+    setCurrentTimeMs(0);
+    setLastSeekMs(null);
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    schedulerRef.current?.reset();
+  }, [timelineActions]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    const scheduler = new TimelineScheduler({
+      audio,
+      actions: timelineActions,
+      callbacks: {
+        onAction: (action, meta) => {
+          executorRef.current?.execute(action);
+          setFiredKeys((prev) => {
+            const next = new Set(prev);
+            next.add(actionKey(action));
+            return next;
+          });
+          setActiveActionKey(actionKey(action));
+          setCurrentTimeMs(meta.actualTimeMs);
+        },
+        onComplete: () => {
+          setStatus('complete');
+        },
+        onSeek: (timeMs) => {
+          setCurrentTimeMs(timeMs);
+          setLastSeekMs(timeMs);
+        },
+        onReset: () => {
+          setFiredKeys(new Set());
+          setActiveActionKey(null);
+        },
+      },
+    });
+
+    schedulerRef.current = scheduler;
 
     return () => {
-      cancelled = true;
+      scheduler.dispose();
+      schedulerRef.current = null;
     };
-  }, []);
+  }, [timelineActions]);
 
   useEffect(() => {
     const container = terminalContainerRef.current;
@@ -179,74 +306,47 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) {
-      return;
-    }
-
-    const scheduler = new TimelineScheduler({
-      audio,
-      callbacks: {
-        onAction: (action, meta) => {
-          executorRef.current?.execute(action);
-          setFiredActions((prev) => [...prev, { action, meta }]);
-        },
-        onComplete: () => {
-          setStatus('complete');
-        },
-        onSeek: (timeMs) => {
-          setLastSeekMs(timeMs);
-          setCurrentTimeMs(timeMs);
-        },
-        onReset: () => {
-          setFiredActions([]);
-          setStatus('idle');
-          setCurrentTimeMs(0);
-        },
-      },
-    });
-
-    schedulerRef.current = scheduler;
-
     return () => {
-      scheduler.dispose();
-      schedulerRef.current = null;
+      if (planningTimeoutRef.current) {
+        window.clearTimeout(planningTimeoutRef.current);
+        planningTimeoutRef.current = null;
+      }
+      pipelineTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      pipelineTimeoutsRef.current = [];
     };
   }, []);
-
-  useEffect(() => {
-    const scheduler = schedulerRef.current;
-    if (!scheduler) {
-      return;
-    }
-    scheduler.setActions(timelineActions);
-    setFiredActions([]);
-    setStatus('idle');
-    setLastSeekMs(null);
-    setCurrentTimeMs(0);
-  }, [timelineActions]);
 
   const handleEditorMount = useCallback<OnMount>((editor, monaco) => {
     executorRef.current?.attachEditor(editor, monaco);
     editor.updateOptions({
-      readOnly: false,
-      fontLigatures: true,
-      cursorBlinking: 'smooth',
-      automaticLayout: true,
+      readOnly: true,
+      domReadOnly: true,
+      cursorBlinking: 'solid',
+      cursorStyle: 'block',
+      smoothScrolling: true,
+      minimap: { enabled: false },
+      lineNumbers: 'on',
+      fontSize: 14,
+      renderLineHighlight: 'none',
+      wordWrap: 'on',
     });
     setEditorReady(true);
   }, []);
 
-  const handlePlay = useCallback(async () => {
+  const handleTogglePlay = useCallback(async () => {
     const audio = audioRef.current;
     const scheduler = schedulerRef.current;
-    if (!audio || !scheduler) {
+    if (!audio || !scheduler || timelineLoading || !editorReady || !assetsReady) {
       return;
     }
-    if (!editorReady) {
-      console.warn('Editor not ready yet.');
+
+    if (status === 'running') {
+      audio.pause();
+      scheduler.stop();
+      setStatus('paused');
       return;
     }
+
     try {
       await audio.play();
       scheduler.start();
@@ -254,243 +354,464 @@ function App() {
     } catch (error) {
       console.error('Audio playback failed', error);
     }
-  }, [editorReady]);
-
-  const handlePause = useCallback(() => {
-    const audio = audioRef.current;
-    const scheduler = schedulerRef.current;
-    if (!audio || !scheduler) {
-      return;
-    }
-    audio.pause();
-    scheduler.stop();
-    setStatus('paused');
-  }, []);
+  }, [assetsReady, editorReady, status, timelineLoading]);
 
   const handleReset = useCallback(() => {
     const audio = audioRef.current;
     const scheduler = schedulerRef.current;
-    if (!audio || !scheduler) {
+    const executor = executorRef.current;
+    if (!audio || !scheduler || !executor) {
       return;
     }
+
     audio.pause();
     audio.currentTime = 0;
     scheduler.reset();
-    setLastSeekMs(null);
+    executor.reset();
+    setFiles([]);
+    setActiveFile(null);
+    setFiredKeys(new Set());
+    setActiveActionKey(null);
+    setStatus('idle');
     setCurrentTimeMs(0);
+    setLastSeekMs(null);
   }, []);
 
-  const handleFileClick = useCallback((path: string) => {
-    executorRef.current?.focusFile(path);
-  }, []);
+  const handleTimelineFileSelection = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) {
+        return;
+      }
+      setAssetMessage(`Loading ${file.name}...`);
+      setTimelineLoading(true);
+      setTimelineError(null);
+      setAssetsReady(false);
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (!Array.isArray(parsed?.actions)) {
+          throw new Error('Timeline file missing actions array');
+        }
+        setTimelineActions(parsed.actions as TimelineAction[]);
+        setAssetMessage(`Loaded timeline ${file.name}`);
+        setAssetsReady(true);
+      } catch (error) {
+        console.error('Failed to read timeline file', error);
+        setTimelineError(error instanceof Error ? error.message : 'Invalid timeline file');
+        setAssetMessage('Failed to load timeline');
+        setAssetsReady(timelineActions.length > 0);
+      } finally {
+        setTimelineLoading(false);
+      }
+    },
+    [timelineActions.length],
+  );
 
-  const progressRatio = useMemo(() => {
-    if (!timelineDurationMs) {
-      return 0;
+  const handleAudioFileSelection = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) {
+        return;
+      }
+      if (audioObjectUrlRef.current) {
+        URL.revokeObjectURL(audioObjectUrlRef.current);
+        audioObjectUrlRef.current = null;
+      }
+      const url = URL.createObjectURL(file);
+      audioObjectUrlRef.current = url;
+      setAudioSource(url);
+      setAssetMessage(`Loaded audio ${file.name}`);
+      setAssetsReady(timelineActions.length > 0);
+      setPipelineStage('ready');
+      handleReset();
+    },
+    [handleReset, timelineActions.length],
+  );
+
+  const handleExportTimeline = useCallback(() => {
+    if (timelineActions.length === 0) {
+      return;
     }
-    return Math.min(1, currentTimeMs / timelineDurationMs);
-  }, [currentTimeMs, timelineDurationMs]);
+    const blob = new Blob([JSON.stringify({ actions: timelineActions }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'show-timeline.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, [timelineActions]);
 
-  const firedKeys = useMemo(() => new Set(firedActions.map(({ action }) => actionKey(action))), [firedActions]);
-  const lastFiredKey = firedActions.length > 0 ? actionKey(firedActions[firedActions.length - 1].action) : null;
+  const handleResetShow = useCallback(() => {
+    if (audioObjectUrlRef.current) {
+      URL.revokeObjectURL(audioObjectUrlRef.current);
+      audioObjectUrlRef.current = null;
+    }
+    setAudioSource(DEFAULT_AUDIO_SOURCE);
+    setAssetMessage('Restored default show');
+    setPipelineStage('ready');
+    handleReset();
+    fetchShowFromUrl('/demo-timeline.json');
+  }, [fetchShowFromUrl, handleReset]);
+
+  const handleJumpToAction = useCallback(
+    (target: TimelineAction) => {
+      const scheduler = schedulerRef.current;
+      const audio = audioRef.current;
+      const executor = executorRef.current;
+      if (!scheduler || !audio || !executor) {
+        return;
+      }
+
+      const targetTime = target.timeMs;
+      scheduler.stop();
+      audio.pause();
+      executor.reset();
+      setFiles([]);
+      setActiveFile(null);
+      const executedKeys = new Set<string>();
+      let lastKey: string | null = null;
+
+      for (const action of scheduler.getActions()) {
+        if (action.timeMs > targetTime) {
+          break;
+        }
+        executor.execute(action);
+        const key = actionKey(action);
+        executedKeys.add(key);
+        lastKey = key;
+      }
+
+      audio.currentTime = targetTime / 1000;
+      scheduler.prime(targetTime);
+      setFiredKeys(executedKeys);
+      setActiveActionKey(lastKey);
+      setCurrentTimeMs(targetTime);
+      setStatus('paused');
+      setLastSeekMs(targetTime);
+    },
+    [],
+  );
+
+  const sendChatMessage = useCallback(() => {
+    const trimmed = chatInput.trim();
+    if (!trimmed || chatBusy) {
+      return;
+    }
+    const id = `user-${Date.now()}`;
+    setChatMessages((prev) => [...prev, { id, role: 'user', content: trimmed }]);
+    setChatInput('');
+    setChatBusy(true);
+    setPipelineStage('planning');
+
+    planningTimeoutRef.current = window.setTimeout(() => {
+      const planId = `plan-${Date.now()}`;
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: planId,
+          role: 'assistant',
+          hasPlan: true,
+          content: `Hey! ${trimmed} sounds great. Here's how I'll stage it:
+
+1. Set the scene with the key file structure.
+2. Type through the concepts with inline narration.
+3. Wrap up in the terminal with takeaways.
+
+Tap Approve when you're ready for me to spin up the show.`,
+        },
+      ]);
+      setPendingPlanId(planId);
+      setChatBusy(false);
+      planningTimeoutRef.current = null;
+      setPipelineStage('idle');
+    }, 900);
+  }, [chatBusy, chatInput]);
+
+  const cancelPlanning = useCallback(() => {
+    if (planningTimeoutRef.current) {
+      window.clearTimeout(planningTimeoutRef.current);
+      planningTimeoutRef.current = null;
+    }
+    pipelineTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    pipelineTimeoutsRef.current = [];
+    setChatBusy(false);
+    setPendingPlanId(null);
+    setPipelineStage('idle');
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: `cancel-${Date.now()}`,
+        role: 'assistant',
+        content: 'No worries�canceled that request. Ready when you are.',
+      },
+    ]);
+  }, []);
+
+  const approvePlan = useCallback(() => {
+    pipelineTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    pipelineTimeoutsRef.current = [];
+    setPendingPlanId(null);
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: `approve-${Date.now()}`,
+        role: 'assistant',
+        content: "Awesome�warming up the stage now. You'll see the show queued in just a moment.",
+      },
+    ]);
+    setPipelineStage('generating');
+    setAssetsReady(false);
+    const generatingTimeout = window.setTimeout(() => setPipelineStage('rendering'), 1200);
+    const readyTimeout = window.setTimeout(() => {
+      setPipelineStage('ready');
+      setAssetsReady(timelineActions.length > 0);
+    }, 2400);
+    pipelineTimeoutsRef.current.push(generatingTimeout, readyTimeout);
+  }, [timelineActions.length]);
+
+  const showPlanActions = pipelineStage !== 'ready' && pipelineStage !== 'idle';
+  const disabledForPlayback = timelineLoading || !editorReady || !assetsReady;
+  const isPlaying = status === 'running';
+  const progressRatio = timelineDurationMs === 0 ? 0 : Math.min(1, currentTimeMs / timelineDurationMs);
 
   return (
-    <div className="vs-root flex min-h-screen bg-[#1e1e1e] text-[#cccccc]">
-      <audio ref={audioRef} src="/demo.mp3" preload="auto" className="hidden" />
-      <aside className="hidden w-12 flex-col items-center gap-4 bg-[#202020] py-4 md:flex">
-        {activityBarItems.map((item) => (
-          <div
-            key={item}
-            className="flex h-8 w-8 items-center justify-center rounded text-[11px] uppercase tracking-[0.2em] text-[#8c8c8c] hover:bg-[#333333] hover:text-white"
-            title={item}
-          >
-            {item.charAt(0)}
-          </div>
-        ))}
-      </aside>
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="hidden w-64 flex-col border-r border-[#2a2a2a] bg-[#252526] md:flex">
-          <div className="border-b border-[#2a2a2a] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#858585]">
-            Explorer
-          </div>
-          <div className="px-4 py-3 text-xs font-semibold text-[#bdbdbd]">MONACO ACTOR</div>
-          <nav className="flex-1 overflow-y-auto px-2 pb-4">
-            {files.map((file) => (
+    <div className="ide-root">
+      <audio ref={audioRef} src={audioSource} preload="auto" />
+      <div className="ide-shell">
+        <aside className="activity-bar">
+          {ACTIVITY_ITEMS.map((item) => {
+            const isExperience = item.togglesConsole;
+            const isActive = isExperience ? isConsoleOpen : item.id === 'explorer';
+            return (
               <button
-                key={file}
-                onClick={() => handleFileClick(file)}
-                className={`group flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm transition ${
-                  activeFile === file
-                    ? 'bg-[#37373d] text-white'
-                    : 'text-[#cccccc] hover:bg-[#2d2d30] hover:text-white'
-                }`}
-              >
-                <span>{file}</span>
-              </button>
-            ))}
-            {files.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-[#8a8a8a]">Timeline will generate files during playback.</p>
-            ) : null}
-          </nav>
-        </aside>
-        <main className="flex flex-1 flex-col bg-[#1e1e1e]">
-          <header className="flex h-10 items-center gap-1 border-b border-[#2a2a2a] bg-[#1f1f1f] px-4">
-            {files.map((file) => (
-              <button
-                key={`tab-${file}`}
-                onClick={() => handleFileClick(file)}
-                className={`flex items-center gap-2 rounded-t px-3 py-1 text-xs font-medium transition ${
-                  activeFile === file
-                    ? 'bg-[#1e1e1e] text-[#ffffff]'
-                    : 'text-[#9d9d9d] hover:bg-[#2d2d30] hover:text-white'
-                }`}
-              >
-                <span>{file}</span>
-              </button>
-            ))}
-            <div className="ml-auto text-xs text-[#999999]">Status: {status}</div>
-          </header>
-          <div className="flex flex-1 flex-col">
-            <div className="flex-1">
-              <Editor
-                height="100%"
-                defaultLanguage="typescript"
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  readOnly: false,
-                  smoothScrolling: true,
-                  scrollBeyondLastLine: false,
+                key={item.id}
+                type="button"
+                className={`activity-button ${isActive ? 'activity-button-active' : ''}`}
+                title={item.label}
+                onClick={() => {
+                  if (isExperience) {
+                    setIsConsoleOpen((prev) => !prev);
+                  }
                 }}
-                theme="vs-dark"
-                onMount={handleEditorMount}
-              />
-            </div>
-            <div className="h-44 border-t border-[#2a2a2a] bg-[#1b1b1b]">
-              <div className="flex h-9 items-center border-b border-[#2a2a2a] px-4 text-xs font-semibold uppercase tracking-[0.2em] text-[#9f9f9f]">
-                Terminal
-              </div>
-              <div ref={terminalContainerRef} className="h-[calc(100%-2.25rem)] px-2 py-2" />
-            </div>
+              >
+                {isExperience ? <ExperienceIcon className="w-5 h-5" /> : <ActivityIcon className="w-5 h-5" />}
+                <span className="sr-only">{item.label}</span>
+              </button>
+            );
+          })}
+        </aside>
+
+        <aside className="explorer-panel">
+          <header className="explorer-header">EXPLORER</header>
+          <div className="explorer-body">
+            {files.length === 0 ? (
+              <p className="explorer-empty">Files will appear as the show unfolds.</p>
+            ) : (
+              <ul className="explorer-list">
+                {files.map((file) => (
+                  <li key={file}>
+                    <button
+                      type="button"
+                      className={`explorer-item ${activeFile === file ? 'explorer-item-active' : ''}`}
+                      onClick={() => executorRef.current?.focusFile(file)}
+                    >
+                      {file}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
+
+        <main className="editor-stack">
+          <div className="tab-strip">
+            {files.length === 0 ? (
+              <div className="tab-placeholder">Waiting for the first cue...</div>
+            ) : (
+              files.map((file) => (
+                <button
+                  type="button"
+                  key={`tab-${file}`}
+                  className={`tab ${activeFile === file ? 'tab-active' : ''}`}
+                  onClick={() => executorRef.current?.focusFile(file)}
+                >
+                  {file}
+                </button>
+              ))
+            )}
+          </div>
+          <div className="editor-surface">
+            <Editor
+              height="100%"
+              defaultLanguage="typescript"
+              theme="vs-dark"
+              options={{
+                scrollBeyondLastLine: false,
+                smoothScrolling: true,
+                minimap: { enabled: false },
+                readOnly: true,
+                domReadOnly: true,
+              }}
+              onMount={handleEditorMount}
+            />
+          </div>
+          <div className="terminal-panel">
+            <header className="terminal-header">TERMINAL</header>
+            <div ref={terminalContainerRef} className="terminal-body" />
           </div>
         </main>
-        <aside className="flex w-80 flex-col border-l border-[#2a2a2a] bg-[#1b1b1f]">
-          <div className="border-b border-[#2a2a2a] px-4 py-4">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.35em] text-[#8a8a8a]">Timeline Player</h2>
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                onClick={handlePlay}
-                disabled={timelineLoading || !editorReady}
-                className="rounded bg-[#0e639c] px-3 py-1.5 text-sm font-medium text-white transition hover:bg-[#1177bb] disabled:cursor-not-allowed disabled:bg-[#3a3d41] disabled:text-[#9d9d9d]"
-              >
-                Play
-              </button>
-              <button
-                onClick={handlePause}
-                disabled={timelineLoading}
-                className="rounded border border-[#3c3c3c] px-3 py-1.5 text-sm font-medium text-[#cccccc] transition hover:border-[#555555] disabled:cursor-not-allowed disabled:border-[#2d2d30] disabled:text-[#757575]"
-              >
-                Pause
-              </button>
-              <button
-                onClick={handleReset}
-                disabled={timelineLoading}
-                className="rounded border border-[#3c3c3c] px-3 py-1.5 text-sm font-medium text-[#cccccc] transition hover:border-[#555555] disabled:cursor-not-allowed disabled:border-[#2d2d30] disabled:text-[#757575]"
-              >
-                Reset
-              </button>
-            </div>
-            <div className="mt-4">
-              <div className="h-1 w-full overflow-hidden rounded-full bg-[#2d2d30]">
-                <div className="h-full bg-[#0e639c]" style={{ width: `${progressRatio * 100}%` }} />
+
+        {isConsoleOpen ? (
+          <aside className="experience-console">
+            <section className="player-panel">
+              <header className="player-header">
+                <div>
+                  <p className="player-title">Show Player</p>
+                  <p className="player-subtitle">{assetsReady ? 'Ready to play' : 'Preparing assets...'}</p>
+                </div>
+                <div className="player-controls">
+                  <button
+                    type="button"
+                    className={`icon-button ${disabledForPlayback ? 'icon-button-disabled' : ''}`}
+                    onClick={handleTogglePlay}
+                    disabled={disabledForPlayback}
+                  >
+                    {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5" />}
+                    <span className="sr-only">{isPlaying ? 'Pause' : 'Play'}</span>
+                  </button>
+                  <button type="button" className="icon-button" onClick={handleReset}>
+                    <ResetIcon className="w-5 h-5" />
+                    <span className="sr-only">Reset</span>
+                  </button>
+                </div>
+              </header>
+              <div className="player-progress">
+                <div className="player-progress-bar">
+                  <div className="player-progress-fill" style={{ width: `${progressRatio * 100}%` }} />
+                </div>
+                <div className="player-progress-meta">
+                  <span>{formatTime(currentTimeMs)}</span>
+                  <span>{formatTime(timelineDurationMs)}</span>
+                </div>
               </div>
-              <div className="mt-2 flex justify-between text-[11px] text-[#9f9f9f]">
-                <span>{formatTime(currentTimeMs)}</span>
-                <span>{formatTime(timelineDurationMs)}</span>
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-[#a6a6a6]">
-              <div className="rounded border border-[#2d2d30] bg-[#202025] px-3 py-2">
-                <span className="block text-[10px] uppercase tracking-[0.2em] text-[#777777]">Actions</span>
-                <span className="mt-1 text-sm text-white">{timelineActions.length}</span>
-              </div>
-              <div className="rounded border border-[#2d2d30] bg-[#202025] px-3 py-2">
-                <span className="block text-[10px] uppercase tracking-[0.2em] text-[#777777]">Last Drift</span>
-                <span className="mt-1 text-sm text-white">
-                  {firedActions.length > 0
-                    ? `${firedActions[firedActions.length - 1].meta.driftMs.toFixed(1)}ms`
-                    : '—'}
-                </span>
-              </div>
-            </div>
-            {timelineError ? (
-              <p className="mt-3 text-xs text-[#dcdcaa]">Timeline fallback in use: {timelineError}</p>
-            ) : null}
-            {lastSeekMs !== null ? (
-              <p className="mt-2 text-[11px] text-[#9f9f9f]">Last seek: {formatTime(lastSeekMs)}</p>
-            ) : null}
-          </div>
-          <div className="flex-1 overflow-y-auto px-4 py-3">
-            <section>
-              <h3 className="text-xs font-semibold uppercase tracking-[0.3em] text-[#8a8a8a]">Timeline</h3>
-              <ul className="mt-3 space-y-2 text-xs">
-                {timelineActions.map((action) => {
-                  const key = actionKey(action);
-                  const hasFired = firedKeys.has(key);
-                  const isActive = lastFiredKey === key;
-                  return (
-                    <li
-                      key={key}
-                      className={`rounded border px-3 py-2 transition ${
-                        isActive
-                          ? 'border-[#0e639c] bg-[#094771] text-white'
-                          : hasFired
-                          ? 'border-[#2f2f2f] bg-[#252526] text-[#bdbdbd]'
-                          : 'border-[#2a2a2a] bg-[#1f1f1f] text-[#9f9f9f]'
-                      }`}
-                    >
-                      <div className="flex justify-between font-medium text-[11px] uppercase tracking-wide">
-                        <span>{formatActionLabel(action.kind)}</span>
-                        <span>{formatTime(action.timeMs)}</span>
-                      </div>
-                      {'path' in action && action.path ? (
-                        <div className="mt-1 truncate text-[11px] text-[#dcdcaa]">{action.path}</div>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+              {timelineError ? <p className="player-warning">Timeline fallback in use: {timelineError}</p> : null}
             </section>
-            <section className="mt-6">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.3em] text-[#8a8a8a]">Fired Actions</h3>
-              <div className="mt-3 max-h-60 overflow-y-auto rounded border border-[#2a2a2a] bg-[#1f1f1f]">
-                {firedActions.length === 0 ? (
-                  <div className="flex h-24 items-center justify-center px-4 text-center text-[11px] text-[#8a8a8a]">
-                    Actions will appear here during playback.
-                  </div>
+
+            <section className="timeline-panel">
+              <header className="panel-header">Timeline Overview</header>
+              <div className="timeline-list">
+                {majorTimelineActions.length === 0 ? (
+                  <p className="timeline-empty">Timeline cues will populate once the show starts.</p>
                 ) : (
-                  <ul className="divide-y divide-[#2a2a2a] text-xs">
-                    {[...firedActions].reverse().map(({ action, meta }, index) => (
-                      <li key={`${actionKey(action)}-${index}`} className="px-3 py-2 text-[#bdbdbd]">
-                        <div className="flex justify-between font-medium text-[11px] uppercase tracking-wide">
-                          <span>{formatActionLabel(action.kind)}</span>
-                          <span>{formatTime(meta.actualTimeMs)}</span>
-                        </div>
-                        <div className="mt-1 flex justify-between text-[11px] text-[#8a8a8a]">
-                          <span>Scheduled: {formatTime(meta.scheduledTimeMs)}</span>
-                          <span>Drift: {meta.driftMs.toFixed(1)}ms</span>
-                        </div>
-                      </li>
-                    ))}
+                  <ul>
+                    {majorTimelineActions.map((action) => {
+                      const key = actionKey(action);
+                      const isComplete = firedKeys.has(key);
+                      const isActive = activeActionKey === key;
+                      return (
+                        <li key={key}>
+                          <button
+                            type="button"
+                            className={`timeline-item ${isActive ? 'timeline-item-active' : isComplete ? 'timeline-item-complete' : ''}`}
+                            onClick={() => handleJumpToAction(action)}
+                          >
+                            <span className="timeline-item-label">{action.kind.replace('_', ' ')}</span>
+                            <span className="timeline-item-time">{formatTime(action.timeMs)}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
+              {lastSeekMs !== null ? <p className="timeline-note">Queued at {formatTime(lastSeekMs)}</p> : null}
             </section>
-          </div>
-        </aside>
+
+            <section className="assets-panel">
+              <header className="panel-header">Show Assets</header>
+              {assetMessage ? <p className="assets-message">{assetMessage}</p> : null}
+              <div className="assets-grid">
+                <label className="assets-upload">
+                  <input type="file" accept="application/json,.json" onChange={handleTimelineFileSelection} />
+                  <span>Import timeline</span>
+                </label>
+                <label className="assets-upload">
+                  <input type="file" accept="audio/*" onChange={handleAudioFileSelection} />
+                  <span>Import audio</span>
+                </label>
+                <button type="button" className="assets-button" onClick={handleExportTimeline} disabled={timelineActions.length === 0}>
+                  Export timeline
+                </button>
+                <button type="button" className="assets-button" onClick={handleResetShow}>
+                  Restore default show
+                </button>
+              </div>
+            </section>
+
+            <section className="chat-panel">
+              <header className="panel-header">Director Chat</header>
+              <div className="chat-log">
+                {chatMessages.map((message) => (
+                  <div key={message.id} className={`chat-bubble chat-${message.role}`}>
+                    <p>{message.content}</p>
+                    {message.hasPlan && pendingPlanId === message.id ? (
+                      <div className="chat-actions">
+                        <button type="button" className="chat-button-primary" onClick={approvePlan}>
+                          Approve show plan
+                        </button>
+                        <button type="button" className="chat-button" onClick={cancelPlanning}>
+                          Cancel
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <form
+                className="chat-input"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  sendChatMessage();
+                }}
+              >
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  placeholder="Ask for the next show..."
+                  disabled={chatBusy}
+                />
+                <button type="submit" className="chat-send" disabled={chatBusy}>
+                  Send
+                </button>
+              </form>
+              {showPlanActions ? (
+                <div className="pipeline-status">
+                  {PlanStages.map((stage) => (
+                    <div key={stage} className={`pipeline-stage ${pipelineStage === stage ? 'pipeline-stage-active' : ''}`}>
+                      <span className="pipeline-dot" />
+                      <span className="pipeline-label">{stage.charAt(0).toUpperCase() + stage.slice(1)}</span>
+                    </div>
+                  ))}
+                  <button type="button" className="chat-button" onClick={cancelPlanning}>
+                    Cancel job
+                  </button>
+                </div>
+              ) : null}
+            </section>
+          </aside>
+        ) : null}
       </div>
     </div>
   );
 }
 
 export default App;
+
+

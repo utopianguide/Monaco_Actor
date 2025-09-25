@@ -4,7 +4,7 @@ import { VirtualFileSystem } from './virtualFileSystem';
 import type { TerminalController } from '../terminal/terminalController';
 
 interface ActionExecutorOptions {
-  onFileOpened?: (path: string) => void;
+  onFileOpened?: (path: string | null) => void;
   onFileCreated?: (path: string) => void;
 }
 
@@ -31,16 +31,29 @@ export class ActionExecutor {
     this.terminal = terminal;
   }
 
-  dispose() {
-    this.fs.dispose();
+  reset() {
+    this.fs.reset();
+    if (this.editor) {
+      this.editor.setModel(null);
+    }
     if (this.highlightTimeout) {
       window.clearTimeout(this.highlightTimeout);
       this.highlightTimeout = null;
     }
+    if (this.highlightDecorations.length > 0 && this.editor) {
+      this.editor.deltaDecorations(this.highlightDecorations, []);
+    }
+    this.highlightDecorations = [];
+    this.terminal?.clear();
+    this.options.onFileOpened?.(null);
+  }
+
+  dispose() {
+    this.reset();
+    this.fs.dispose();
     this.editor = null;
     this.monacoInstance = null;
     this.terminal = null;
-    this.highlightDecorations = [];
   }
 
   execute(action: TimelineAction) {
@@ -127,24 +140,28 @@ export class ActionExecutor {
       return;
     }
 
-    const editor = this.editor;
     const monaco = this.monacoInstance;
+    const editor = this.editor;
     const currentPosition = editor.getPosition() ?? model.getFullModelRange().getEndPosition();
-    const range = new monaco.Range(
+    const insertRange = new monaco.Range(
       currentPosition.lineNumber,
       currentPosition.column,
       currentPosition.lineNumber,
       currentPosition.column,
     );
-    const startOffset = model.getOffsetAt(range.getStartPosition());
+    const startOffset = model.getOffsetAt(insertRange.getStartPosition());
 
-    editor.executeEdits('timeline-type', [
-      {
-        range,
-        text: action.text,
-        forceMoveMarkers: true,
-      },
-    ]);
+    model.pushEditOperations(
+      [],
+      [
+        {
+          range: insertRange,
+          text: action.text,
+          forceMoveMarkers: true,
+        },
+      ],
+      () => null,
+    );
 
     const newPosition = model.getPositionAt(startOffset + action.text.length);
     editor.setPosition(newPosition);

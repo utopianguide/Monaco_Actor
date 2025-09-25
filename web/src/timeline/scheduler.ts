@@ -45,6 +45,14 @@ export class TimelineScheduler {
     this.audio.addEventListener('ended', this.boundHandleEnded);
   }
 
+  getActions() {
+    return this.actions;
+  }
+
+  getPointer() {
+    return this.pointer;
+  }
+
   setActions(actions: TimelineAction[]): void {
     this.actions = [...actions].sort((a, b) => a.timeMs - b.timeMs);
     this.resetPointer();
@@ -82,6 +90,10 @@ export class TimelineScheduler {
       this.syncPointer(timeMs);
       this.callbacks.onSeek?.(timeMs);
     }
+  }
+
+  prime(timeMs: number): void {
+    this.syncPointer(timeMs);
   }
 
   dispose(): void {
