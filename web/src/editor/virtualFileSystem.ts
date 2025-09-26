@@ -68,18 +68,19 @@ export class VirtualFileSystem {
     return this.openedPath;
   }
 
-  private getOrCreateModel(path: string, content = '') {
+  private getOrCreateModel(path: string, content?: string) {
     const monaco = this.assertMonaco();
     const existing = this.models.get(path);
     if (existing) {
-      if (content && existing.getValue() !== content) {
+      if (content !== undefined && existing.getValue() !== content) {
         existing.setValue(content);
       }
       return existing;
     }
 
     const uri = monaco.Uri.file(path);
-    const model = monaco.editor.getModel(uri) ?? monaco.editor.createModel(content, undefined, uri);
+    const initialText = content ?? '';
+    const model = monaco.editor.getModel(uri) ?? monaco.editor.createModel(initialText, undefined, uri);
     this.models.set(path, model);
     return model;
   }

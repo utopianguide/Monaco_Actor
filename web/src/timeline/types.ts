@@ -33,10 +33,8 @@ export interface TypeAction extends TimelineActionBase<'type'> {
   text: string;
   /** Optional delay to keep typing active after the scheduled start */
   delayMs?: number;
-  /** Typing speed in milliseconds per character (default: 50ms) */
-  typingSpeedMs?: number;
-  /** Variable speed control: 'fast' | 'normal' | 'slow' | custom number */
-  speed?: 'fast' | 'normal' | 'slow' | number;
+  /** Optional typing speed. If provided, animates per-character typing at this CPS. */
+  charactersPerSecond?: number;
 }
 
 export interface MoveCursorAction extends TimelineActionBase<'move_cursor'> {
@@ -54,6 +52,8 @@ export interface HighlightRangeAction extends TimelineActionBase<'highlight_rang
     endColumn: number;
   };
   durationMs?: number;
+  /** Optional color token name, e.g., 'blue' | 'green' | 'yellow' | 'pink' | 'red' | 'cyan' */
+  color?: string;
 }
 
 export interface TerminalRunAction extends TimelineActionBase<'terminal_run'> {

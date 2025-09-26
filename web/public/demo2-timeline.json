@@ -1,0 +1,152 @@
+{
+  "actions": [
+    {
+      "kind": "clear_terminal",
+      "timeMs": 100
+    },
+    {
+      "kind": "create_file",
+      "timeMs": 10000,
+      "path": "vspeak-demo/welcome.js",
+      "content": "// Welcome to the VSpeak AI Narrator Demo!"
+    },
+    {
+      "kind": "move_cursor",
+      "timeMs": 13330,
+      "path": "vspeak-demo/welcome.js",
+      "line": 1,
+      "column": 41
+    },
+    {
+      "kind": "type",
+      "timeMs": 13500,
+      "path": "vspeak-demo/welcome.js",
+      "text": "\n\n// Actions are synchronized with my voice, creating a guided experience.",
+      "charactersPerSecond": 25
+    },
+    {
+      "kind": "create_file",
+      "timeMs": 16500,
+      "path": "vspeak-demo/index.html",
+      "content": ""
+    },
+    {
+      "kind": "open_file",
+      "timeMs": 18000,
+      "path": "vspeak-demo/welcome.js"
+    },
+    {
+      "kind": "open_file",
+      "timeMs": 31000,
+      "path": "vspeak-demo/index.html"
+    },
+    {
+      "kind": "type",
+      "timeMs": 35000,
+      "path": "vspeak-demo/index.html",
+      "text": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>VSpeak Demo</title>\n  <link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n  <h1>How VSpeak Works</h1>\n  <div id=\"steps\">\n    <div class=\"step\" id=\"step-1\">\n      <h2>Step 1: The Play</h2>\n      <p>The entire script and actions are born from a prompt.</p>\n    </div>\n    <div class=\"step\" id=\"step-2\">\n      <h2>Step 2: Natural Audio</h2>\n      <p>Text-to-speech generates my voice.</p>\n    </div>\n    <div class=\"step\" id=\"step-3\">\n      <h2>Step 3: Timing Analysis</h2>\n      <p>This is the real magic, syncing words to actions.</p>\n    </div>\n    <div class=\"step\" id=\"step-4\">\n      <h2>Step 4: Synchronized Playback</h2>\n      <p>What you're seeing right now!</p>\n    </div>\n  </div>\n  <script src=\"script.js\"></script>\n</body>\n</html>",
+      "charactersPerSecond": 35
+    },
+    {
+      "kind": "highlight_range",
+      "timeMs": 42700,
+      "path": "vspeak-demo/index.html",
+      "range": { "startLine": 12, "startColumn": 7, "endLine": 12, "endColumn": 28 },
+      "durationMs": 3000, "color": "yellow"
+    },
+    {
+      "kind": "highlight_range",
+      "timeMs": 46950,
+      "path": "vspeak-demo/index.html",
+      "range": { "startLine": 16, "startColumn": 7, "endLine": 16, "endColumn": 31 },
+      "durationMs": 2000, "color": "cyan"
+    },
+    {
+      "kind": "highlight_range",
+      "timeMs": 49750,
+      "path": "vspeak-demo/index.html",
+      "range": { "startLine": 20, "startColumn": 7, "endLine": 20, "endColumn": 33 },
+      "durationMs": 3000, "color": "green"
+    },
+    {
+      "kind": "highlight_range",
+      "timeMs": 54500,
+      "path": "vspeak-demo/index.html",
+      "range": { "startLine": 24, "startColumn": 7, "endLine": 24, "endColumn": 39 },
+      "durationMs": 3500, "color": "pink"
+    },
+    {
+      "kind": "create_file",
+      "timeMs": 60000,
+      "path": "vspeak-demo/style.css"
+    },
+    {
+      "kind": "type",
+      "timeMs": 64000,
+      "path": "vspeak-demo/style.css",
+      "text": "body {\n  background-color: #1e1e1e;\n  color: #d4d4d4;\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n  padding: 2rem;\n  text-align: center;\n}\n\nh1 {\n  color: #569cd6;\n}\n\n#steps {\n  display: grid;\n  grid-template-columns: repeat(2, 1fr);\n  gap: 1rem;\n  margin-top: 2rem;\n  text-align: left;\n}\n\n.step {\n  background: #252526;\n  border: 1px solid #333;\n  border-radius: 8px;\n  padding: 1.5rem;\n  transition: transform 0.2s ease, box-shadow 0.2s ease;\n}\n\n.step:hover {\n  transform: translateY(-5px);\n  box-shadow: 0 5px 15px rgba(0,0,0,0.3);\n}",
+      "charactersPerSecond": 40
+    },
+    {
+      "kind": "create_file",
+      "timeMs": 78000,
+      "path": "vspeak-demo/script.js"
+    },
+    {
+      "kind": "type",
+      "timeMs": 79000,
+      "path": "vspeak-demo/script.js",
+      "text": "document.addEventListener('DOMContentLoaded', () => {\n  const button = document.createElement('button');\n  button.textContent = 'Next Step';\n  document.body.appendChild(button);\n\n  const steps = document.querySelectorAll('.step');\n  let currentStep = -1;\n\n  button.addEventListener('click', () => {\n    if (currentStep >= 0) {\n      steps[currentStep].classList.remove('active');\n    }\n    currentStep = (currentStep + 1) % steps.length;\n    steps[currentStep].classList.add('active');\n    // This comment explains how we're cycling through steps.\n  });\n});",
+      "charactersPerSecond": 25
+    },
+    {
+      "kind": "highlight_range",
+      "timeMs": 88000,
+      "path": "vspeak-demo/script.js",
+      "range": { "startLine": 14, "startColumn": 5, "endLine": 14, "endColumn": 62 },
+      "durationMs": 4000, "color": "yellow"
+    },
+    {
+      "kind": "terminal_run",
+      "timeMs": 101500,
+      "command": "echo Simulating a long-running task... && ping 127.0.0.1 -n 3 > nul && echo Task complete!"
+    },
+    {
+      "kind": "terminal_output",
+      "timeMs": 101800,
+      "text": "Simulating a long-running task...\n"
+    },
+    {
+      "kind": "terminal_output",
+      "timeMs": 104500,
+      "text": "Task complete!\n"
+    },
+    {
+      "kind": "open_file",
+      "timeMs": 120000,
+      "path": "vspeak-demo/style.css"
+    },
+    {
+      "kind": "move_cursor",
+      "timeMs": 121000,
+      "path": "vspeak-demo/style.css",
+      "line": 34,
+      "column": 1
+    },
+    {
+      "kind": "type",
+      "timeMs": 121500,
+      "path": "vspeak-demo/style.css",
+      "text": "\n.step.active {\n  border-color: #569cd6;\n  box-shadow: 0 5px 20px rgba(86, 156, 214, 0.4);\n  transform: translateY(-5px);\n}"
+    },
+    {
+      "kind": "clear_terminal",
+      "timeMs": 133000
+    },
+    {
+      "kind": "terminal_output",
+      "timeMs": 133100,
+      "text": "Thanks for watching!"
+    }
+  ]
+}

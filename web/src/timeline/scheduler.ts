@@ -96,6 +96,15 @@ export class TimelineScheduler {
     this.syncPointer(timeMs);
   }
 
+  /**
+   * Prime the scheduler so that all actions scheduled at or before the given time
+   * are considered already fired. This is useful when you've just rebuilt state
+   * up to an exact cue and want the next frame to start AFTER that cue.
+   */
+  primeAfter(timeMs: number): void {
+    this.syncPointerAfter(timeMs);
+  }
+
   dispose(): void {
     this.stop();
     this.audio.removeEventListener('seeked', this.boundHandleSeek);
@@ -173,6 +182,25 @@ export class TimelineScheduler {
 
     let idx = 0;
     while (idx < this.actions.length && this.actions[idx].timeMs < timeMs - this.toleranceMs) {
+      idx += 1;
+    }
+    this.pointer = idx;
+    this.completeEmitted = this.pointer >= this.actions.length;
+  }
+
+  /**
+   * Inclusive variant used when the caller has already applied effects up to timeMs.
+   * Skips actions whose scheduled time is <= timeMs (with tolerance) so they do not re-fire.
+   */
+  private syncPointerAfter(timeMs: number) {
+    if (timeMs <= 0) {
+      this.pointer = 0;
+      this.completeEmitted = false;
+      return;
+    }
+
+    let idx = 0;
+    while (idx < this.actions.length && this.actions[idx].timeMs <= timeMs + this.toleranceMs) {
       idx += 1;
     }
     this.pointer = idx;
