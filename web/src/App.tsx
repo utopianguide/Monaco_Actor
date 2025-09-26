@@ -87,6 +87,30 @@ function ResetIcon({ className }: { className?: string }) {
   );
 }
 
+function RunIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polygon points="5,3 19,12 5,21" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="6,9 12,15 18,9" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="9,18 15,12 9,6" />
+    </svg>
+  );
+}
+
 function ExperienceIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -136,6 +160,8 @@ function App() {
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
   const [assetMessage, setAssetMessage] = useState<string | null>(null);
+  const [isRunDropdownOpen, setIsRunDropdownOpen] = useState(false);
+  const [isChaptersCollapsed, setIsChaptersCollapsed] = useState(false);
 
   const executorRef = useRef<ActionExecutor | null>(null);
   if (!executorRef.current) {
@@ -315,6 +341,19 @@ function App() {
       pipelineTimeoutsRef.current = [];
     };
   }, []);
+
+  // Close Run dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (isRunDropdownOpen && !target.closest('.activity-dropdown-container')) {
+        setIsRunDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isRunDropdownOpen]);
 
   const handleEditorMount = useCallback<OnMount>((editor, monaco) => {
     executorRef.current?.attachEditor(editor, monaco);
@@ -592,7 +631,56 @@ Tap Approve when you're ready for me to spin up the show.`,
         <aside className="activity-bar">
           {ACTIVITY_ITEMS.map((item) => {
             const isExperience = item.togglesConsole;
-            const isActive = isExperience ? isConsoleOpen : item.id === 'explorer';
+            const isRun = item.id === 'run';
+            const isActive = isExperience ? isConsoleOpen : item.id === 'explorer' || (isRun && isRunDropdownOpen);
+            
+            if (isRun) {
+              return (
+                <div key={item.id} className="activity-dropdown-container">
+                  <button
+                    type="button"
+                    className={`activity-button ${isActive ? 'activity-button-active' : ''}`}
+                    title={item.label}
+                    onClick={() => setIsRunDropdownOpen((prev) => !prev)}
+                  >
+                    <RunIcon className="w-5 h-5" />
+                    <span className="sr-only">{item.label}</span>
+                  </button>
+                  {isRunDropdownOpen && (
+                    <div className="run-dropdown">
+                      <div className="run-dropdown-header">Show Assets</div>
+                      {assetMessage && <div className="run-dropdown-message">{assetMessage}</div>}
+                      <div className="run-dropdown-content">
+                        <label className="run-dropdown-item">
+                          <input type="file" accept="application/json,.json" onChange={handleTimelineFileSelection} />
+                          <span>Import Timeline</span>
+                        </label>
+                        <label className="run-dropdown-item">
+                          <input type="file" accept="audio/*" onChange={handleAudioFileSelection} />
+                          <span>Import Audio</span>
+                        </label>
+                        <button 
+                          type="button" 
+                          className="run-dropdown-button" 
+                          onClick={handleExportTimeline} 
+                          disabled={timelineActions.length === 0}
+                        >
+                          Export Timeline
+                        </button>
+                        <button 
+                          type="button" 
+                          className="run-dropdown-button" 
+                          onClick={handleResetShow}
+                        >
+                          Restore Default Show
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            
             return (
               <button
                 key={item.id}
@@ -709,56 +797,50 @@ Tap Approve when you're ready for me to spin up the show.`,
               {timelineError ? <p className="player-warning">Timeline fallback in use: {timelineError}</p> : null}
             </section>
 
-            <section className="timeline-panel">
-              <header className="panel-header">Timeline Overview</header>
-              <div className="timeline-list">
-                {majorTimelineActions.length === 0 ? (
-                  <p className="timeline-empty">Timeline cues will populate once the show starts.</p>
-                ) : (
-                  <ul>
-                    {majorTimelineActions.map((action) => {
-                      const key = actionKey(action);
-                      const isComplete = firedKeys.has(key);
-                      const isActive = activeActionKey === key;
-                      return (
-                        <li key={key}>
-                          <button
-                            type="button"
-                            className={`timeline-item ${isActive ? 'timeline-item-active' : isComplete ? 'timeline-item-complete' : ''}`}
-                            onClick={() => handleJumpToAction(action)}
-                          >
-                            <span className="timeline-item-label">{action.kind.replace('_', ' ')}</span>
-                            <span className="timeline-item-time">{formatTime(action.timeMs)}</span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-              {lastSeekMs !== null ? <p className="timeline-note">Queued at {formatTime(lastSeekMs)}</p> : null}
+            <section className="chapters-panel">
+              <header className="chapters-header">
+                <button 
+                  type="button" 
+                  className="chapters-toggle"
+                  onClick={() => setIsChaptersCollapsed((prev) => !prev)}
+                  title={isChaptersCollapsed ? 'Expand chapters' : 'Collapse chapters'}
+                >
+                  {isChaptersCollapsed ? <ChevronRightIcon className="w-4 h-4" /> : <ChevronDownIcon className="w-4 h-4" />}
+                </button>
+                <span className="panel-header">Chapters</span>
+              </header>
+              {!isChaptersCollapsed && (
+                <div className="chapters-content">
+                  <div className="timeline-list">
+                    {majorTimelineActions.length === 0 ? (
+                      <p className="timeline-empty">Chapters will appear as the show loads.</p>
+                    ) : (
+                      <ul>
+                        {majorTimelineActions.map((action) => {
+                          const key = actionKey(action);
+                          const isComplete = firedKeys.has(key);
+                          const isActive = activeActionKey === key;
+                          return (
+                            <li key={key}>
+                              <button
+                                type="button"
+                                className={`timeline-item ${isActive ? 'timeline-item-active' : isComplete ? 'timeline-item-complete' : ''}`}
+                                onClick={() => handleJumpToAction(action)}
+                              >
+                                <span className="timeline-item-label">{action.kind.replace('_', ' ')}</span>
+                                <span className="timeline-item-time">{formatTime(action.timeMs)}</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                  {lastSeekMs !== null ? <p className="timeline-note">Queued at {formatTime(lastSeekMs)}</p> : null}
+                </div>
+              )}
             </section>
 
-            <section className="assets-panel">
-              <header className="panel-header">Show Assets</header>
-              {assetMessage ? <p className="assets-message">{assetMessage}</p> : null}
-              <div className="assets-grid">
-                <label className="assets-upload">
-                  <input type="file" accept="application/json,.json" onChange={handleTimelineFileSelection} />
-                  <span>Import timeline</span>
-                </label>
-                <label className="assets-upload">
-                  <input type="file" accept="audio/*" onChange={handleAudioFileSelection} />
-                  <span>Import audio</span>
-                </label>
-                <button type="button" className="assets-button" onClick={handleExportTimeline} disabled={timelineActions.length === 0}>
-                  Export timeline
-                </button>
-                <button type="button" className="assets-button" onClick={handleResetShow}>
-                  Restore default show
-                </button>
-              </div>
-            </section>
 
             <section className="chat-panel">
               <header className="panel-header">Director Chat</header>
