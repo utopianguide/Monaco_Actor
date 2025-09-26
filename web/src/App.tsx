@@ -476,6 +476,9 @@ function App() {
       const executedKeys = new Set<string>();
       let lastKey: string | null = null;
 
+      // Set replaying mode for instant type actions
+      executor.setReplaying(true);
+      
       for (const action of scheduler.getActions()) {
         if (action.timeMs > targetTime) {
           break;
@@ -485,6 +488,9 @@ function App() {
         executedKeys.add(key);
         lastKey = key;
       }
+      
+      // Exit replaying mode
+      executor.setReplaying(false);
 
       audio.currentTime = targetTime / 1000;
       scheduler.prime(targetTime);

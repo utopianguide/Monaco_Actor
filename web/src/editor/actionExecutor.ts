@@ -16,6 +16,9 @@ export class ActionExecutor {
   private highlightDecorations: string[] = [];
   private highlightTimeout: number | null = null;
   private options: ActionExecutorOptions;
+  private fileCursors = new Map<string, { line: number; column: number }>();
+  private typingAnimations = new Map<string, { timeout: number; isTyping: boolean }>();
+  private isReplaying = false;
 
   constructor(options: ActionExecutorOptions = {}) {
     this.options = options;
@@ -33,6 +36,16 @@ export class ActionExecutor {
 
   reset() {
     this.fs.reset();
+    this.fileCursors.clear();
+    
+    // Clear all typing animations
+    for (const animation of this.typingAnimations.values()) {
+      if (animation.timeout) {
+        window.clearTimeout(animation.timeout);
+      }
+    }
+    this.typingAnimations.clear();
+    
     if (this.editor) {
       this.editor.setModel(null);
     }
@@ -62,6 +75,7 @@ export class ActionExecutor {
         this.fs.createFile(action.path, action.content ?? '');
         const model = this.fs.openFile(action.path);
         this.openModel(model, action.path);
+        this.fileCursors.set(action.path, { line: 1, column: 1 });
         this.options.onFileCreated?.(action.path);
         break;
       }
@@ -71,7 +85,11 @@ export class ActionExecutor {
         break;
       }
       case 'type': {
-        this.applyTypeAction(action);
+        if (this.isReplaying) {
+          this.applyTypeActionInstant(action);
+        } else {
+          this.applyTypeAction(action);
+        }
         break;
       }
       case 'move_cursor': {
@@ -99,6 +117,10 @@ export class ActionExecutor {
         console.warn('Unhandled action', neverAction);
       }
     }
+  }
+
+  setReplaying(isReplaying: boolean) {
+    this.isReplaying = isReplaying;
   }
 
   focusFile(path: string) {
@@ -140,14 +162,138 @@ export class ActionExecutor {
       return;
     }
 
+    // Calculate typing speed
+    const getTypingSpeed = (action: TypeAction): number => {
+      if (action.typingSpeedMs) return action.typingSpeedMs;
+      if (action.speed === 'fast') return 25;
+      if (action.speed === 'slow') return 150;
+      if (typeof action.speed === 'number') return action.speed;
+      return 50; // default normal speed
+    };
+
+    const typingSpeed = getTypingSpeed(action);
     const monaco = this.monacoInstance;
     const editor = this.editor;
-    const currentPosition = editor.getPosition() ?? model.getFullModelRange().getEndPosition();
+    
+    // Get the tracked cursor position for this file, or default to start
+    const cursor = this.fileCursors.get(action.path) ?? { line: 1, column: 1 };
+    const startPosition = new monaco.Position(cursor.line, cursor.column);
+    
+    // Clear any existing typing animation for this path
+    const existingAnimation = this.typingAnimations.get(action.path);
+    if (existingAnimation) {
+      if (existingAnimation.timeout) {
+        window.clearTimeout(existingAnimation.timeout);
+      }
+    }
+    
+    // Start typing animation
+    this.startTypingAnimation(action.path, action.text, startPosition, typingSpeed, model, editor, monaco);
+  }
+
+  private startTypingAnimation(
+    path: string,
+    text: string,
+    startPosition: monaco.Position,
+    typingSpeed: number,
+    model: monaco.editor.ITextModel,
+    editor: monaco.editor.IStandaloneCodeEditor,
+    monaco: typeof import('monaco-editor')
+  ) {
+    let currentIndex = 0;
+    const animation = { timeout: 0, isTyping: true };
+    this.typingAnimations.set(path, animation);
+    
+    const typeNextChar = () => {
+      if (!animation.isTyping || currentIndex >= text.length) {
+        // Animation finished or was cancelled
+        this.typingAnimations.delete(path);
+        return;
+      }
+      
+      const char = text[currentIndex];
+      currentIndex++;
+      
+      // Get current cursor position for this file
+      const cursor = this.fileCursors.get(path) ?? { line: startPosition.lineNumber, column: startPosition.column };
+      const insertPosition = new monaco.Position(cursor.line, cursor.column);
+      
+      const insertRange = new monaco.Range(
+        insertPosition.lineNumber,
+        insertPosition.column,
+        insertPosition.lineNumber,
+        insertPosition.column,
+      );
+      const startOffset = model.getOffsetAt(insertRange.getStartPosition());
+      
+      // Insert the character
+      model.pushEditOperations(
+        [],
+        [
+          {
+            range: insertRange,
+            text: char,
+            forceMoveMarkers: true,
+          },
+        ],
+        () => null,
+      );
+      
+      const newPosition = model.getPositionAt(startOffset + 1);
+      
+      // Update tracked cursor position
+      this.fileCursors.set(path, {
+        line: newPosition.lineNumber,
+        column: newPosition.column
+      });
+      
+      // Update editor cursor and scroll
+      if (this.fs.getOpenedPath() === path) {
+        editor.setPosition(newPosition);
+        editor.revealPositionInCenter(newPosition, monaco.editor.ScrollType.Smooth);
+      }
+      
+      // Schedule next character
+      if (currentIndex < text.length) {
+        animation.timeout = window.setTimeout(typeNextChar, typingSpeed);
+      } else {
+        this.typingAnimations.delete(path);
+      }
+    };
+    
+    // Start typing immediately
+    typeNextChar();
+  }
+
+  stopTypingAnimation(path: string) {
+    const animation = this.typingAnimations.get(path);
+    if (animation) {
+      animation.isTyping = false;
+      if (animation.timeout) {
+        window.clearTimeout(animation.timeout);
+      }
+      this.typingAnimations.delete(path);
+    }
+  }
+
+  private applyTypeActionInstant(action: TypeAction) {
+    const model = this.ensureFileOpen(action.path);
+    if (!model || !this.editor || !this.monacoInstance) {
+      return;
+    }
+
+    const monaco = this.monacoInstance;
+    const editor = this.editor;
+    
+    // Get the tracked cursor position for this file, or default to start
+    const cursor = this.fileCursors.get(action.path) ?? { line: 1, column: 1 };
+    const insertPosition = new monaco.Position(cursor.line, cursor.column);
+    
     const insertRange = new monaco.Range(
-      currentPosition.lineNumber,
-      currentPosition.column,
-      currentPosition.lineNumber,
-      currentPosition.column,
+      insertPosition.lineNumber,
+      insertPosition.column,
+      insertPosition.lineNumber,
+      insertPosition.column,
     );
     const startOffset = model.getOffsetAt(insertRange.getStartPosition());
 
@@ -164,8 +310,18 @@ export class ActionExecutor {
     );
 
     const newPosition = model.getPositionAt(startOffset + action.text.length);
-    editor.setPosition(newPosition);
-    editor.revealPositionInCenter(newPosition, monaco.editor.ScrollType.Smooth);
+    
+    // Update tracked cursor position for this file
+    this.fileCursors.set(action.path, {
+      line: newPosition.lineNumber,
+      column: newPosition.column
+    });
+    
+    // Only update editor if this file is currently open
+    if (this.fs.getOpenedPath() === action.path) {
+      editor.setPosition(newPosition);
+      editor.revealPositionInCenter(newPosition, monaco.editor.ScrollType.Smooth);
+    }
   }
 
   private applyMoveCursor(action: MoveCursorAction) {
@@ -174,6 +330,13 @@ export class ActionExecutor {
       return;
     }
     const position = new this.monacoInstance.Position(action.line, action.column);
+    
+    // Update tracked cursor position for this file
+    this.fileCursors.set(action.path, {
+      line: action.line,
+      column: action.column
+    });
+    
     this.editor.setPosition(position);
     this.editor.revealPositionInCenter(position, this.monacoInstance.editor.ScrollType.Smooth);
   }

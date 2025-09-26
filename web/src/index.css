@@ -9,7 +9,8 @@
 
   body {
     margin: 0;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     background-color: #14161c;
     color: #d0d3da;
     font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
@@ -18,7 +19,8 @@
   }
 
   #root {
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .sr-only {
@@ -44,7 +46,7 @@
 
   .ide-root {
     display: flex;
-    min-height: 100vh;
+    height: 100vh;
     background: radial-gradient(circle at top left, #1b2433 0%, #12141b 60%);
   }
 
@@ -52,7 +54,8 @@
     flex: 1;
     display: grid;
     grid-template-columns: 56px 220px minmax(0, 1fr) auto;
-    position: relative;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .activity-bar {
@@ -63,6 +66,8 @@
     align-items: center;
     gap: 8px;
     padding: 12px 0;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .activity-button {
@@ -92,6 +97,8 @@
     display: flex;
     flex-direction: column;
     min-width: 220px;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .explorer-header {
@@ -151,6 +158,8 @@
     flex-direction: column;
     background: #11141d;
     border-right: 1px solid #1d2230;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .tab-strip {
@@ -231,6 +240,8 @@
     flex-direction: column;
     gap: 18px;
     padding: 18px 18px 24px;
+    height: 100vh;
+    overflow-y: auto;
   }
 
   .player-panel,
